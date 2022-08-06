@@ -1,15 +1,18 @@
+import os
 import argparse
 import utils as utils
 from Artcoder import artcoder
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "2, 3"
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--style_img_path', help="path to input style target (default: './style/texture1.1.jpg')", type=str,
-                        default='./style/texture1.1.jpg')
+                        default='./style/texture1.jpg')
     parser.add_argument('--content_img_path', help="path to input content target (default: './content/boy.jpg')", type=str,
-                        default='./content/boy.jpg')
+                        default='./content/HUAWEI2.jpg')
     parser.add_argument('--code_img_path', help="path to input code target (default: './code/boy.jpg')", type=str,
-                        default='./code/boy.jpg')
+                        default='./code/HUAWEI2.png')
     parser.add_argument('--output_dir', help='path to save output stylized QR code', type=str,
                         default='./output/')
     parser.add_argument('--learning_rate',

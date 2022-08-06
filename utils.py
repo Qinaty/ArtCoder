@@ -12,7 +12,7 @@ load = transforms.ToTensor()
 
 
 def load_image(filename, size=None, scale=None):
-    img = Image.open(filename)
+    img = Image.open(filename).convert("L")   # 保证是三通道 Modify L
     if size is not None:
         img = img.resize((size, size), Image.ANTIALIAS)
     elif scale is not None:
@@ -22,19 +22,32 @@ def load_image(filename, size=None, scale=None):
 
 def add_pattern(target_PIL, code_PIL, module_number=37, module_size=16):
     target_img = np.asarray(target_PIL)
-    code_img = np.array(code_PIL)
+    # print(target_img.shape)
+    code_img = np.asarray(code_PIL)
+    # print(code_img.shape)
     output = target_img
     output = np.require(output, dtype='uint8', requirements=['O', 'W'])
+    # ‘WRITEABLE’ (‘W’) ：确保可写数组; 'OWNDATA' ('O') : 确保数组拥有自己的数据
     ms = module_size  # module size
     mn = module_number  # module_number
-    output[0 * ms:(8 * ms) - 1, 0 * ms:(8 * ms) - 1, :] = code_img[0 * ms:(8 * ms) - 1, 0 * ms:(8 * ms) - 1, :]
-    output[((mn - 8) * ms) + 1:(mn * ms), 0 * ms:(8 * ms) - 1, :] = code_img[((mn - 8) * ms) + 1:(mn * ms),
-                                                                    0 * ms:(8 * ms) - 1,
-                                                                    :]
-    output[0 * ms: (8 * ms) - 1, ((mn - 8) * ms) + 1:(mn * ms), :] = code_img[0 * ms: (8 * ms) - 1,
-                                                                     ((mn - 8) * ms) + 1:(mn * ms), :]
-    output[28 * ms: (33 * ms) - 1, 28 * ms:(33 * ms) - 1, :] = code_img[28 * ms: (33 * ms) - 1, 28 * ms:(33 * ms) - 1,
-                                                               :]
+
+    output[0 * ms:(8 * ms) - 1, 0 * ms:(8 * ms) - 1] = code_img[0 * ms:(8 * ms) - 1, 0 * ms:(8 * ms) - 1]
+    output[((mn - 8) * ms) + 1:(mn * ms), 0 * ms:(8 * ms) - 1] = code_img[((mn - 8) * ms) + 1:(mn * ms),
+                                                                    0 * ms:(8 * ms) - 1]
+    output[0 * ms: (8 * ms) - 1, ((mn - 8) * ms) + 1:(mn * ms)] = code_img[0 * ms: (8 * ms) - 1,
+                                                                     ((mn - 8) * ms) + 1:(mn * ms)]
+    output[28 * ms: (33 * ms) - 1, 28 * ms:(33 * ms) - 1] = code_img[28 * ms: (33 * ms) - 1, 28 * ms:(33 * ms) - 1]
+
+
+    #   手动加定位器 左上7*7
+    # output[0 * ms:(8 * ms) - 1, 0 * ms:(8 * ms) - 1, :] = code_img[0 * ms:(8 * ms) - 1, 0 * ms:(8 * ms) - 1, :]
+    # #   左下7*7
+    # output[((mn - 8) * ms) + 1:(mn * ms), 0 * ms:(8 * ms) - 1, :] = code_img[((mn - 8) * ms) + 1:(mn * ms),
+    #                                                                 0 * ms:(8 * ms) - 1, :]
+    # #   右上7*7
+    # output[0 * ms: (8 * ms) - 1, ((mn - 8) * ms) + 1:(mn * ms), :] = code_img[0 * ms: (8 * ms) - 1,
+    #                                                                  ((mn - 8) * ms) + 1:(mn * ms), :]
+    # output[28 * ms: (33 * ms) - 1, 28 * ms:(33 * ms) - 1, :] = code_img[28 * ms: (33 * ms) - 1, 28 * ms:(33 * ms) - 1, :]
 
     output = Image.fromarray(output.astype('uint8'))
     print('Added finder and alignment patterns.')
@@ -60,6 +73,7 @@ def gram_matrix(y):
 
 
 def get_action_matrix(img_target, img_code, module_size=16, IMG_SIZE=592, Dis_b=50, Dis_w=200):
+    # L为灰度图像，每个像素用8个bit表示，0表示黑，255表示白
     img_code = np.require(np.asarray(img_code.convert('L')), dtype='uint8', requirements=['O', 'W'])
     img_target = np.require(np.array(img_target.convert('L')), dtype='uint8', requirements=['O', 'W'])
 
@@ -77,6 +91,7 @@ def get_binary_result(img_code, module_size, module_number=37):
         for i in range(module_number):
             module = img_code[i * module_size:(i + 1) * module_size, j * module_size:(j + 1) * module_size]
             module_color = np.around(np.mean(module), decimals=2)
+            # 阈值直接使用128
             if module_color < 128:
                 binary_result[i, j] = 0
             else:
@@ -89,6 +104,7 @@ def get_center_pixel(img_target, module_size):
     for j in range(37):
         for i in range(37):
             module = img_target[i * module_size:(i + 1) * module_size, j * module_size:(j + 1) * module_size]
+            # 只取中间元素平均
             module_color = np.mean(module[5:12, 5:12])
             center_mat[i, j] = module_color
     return center_mat
@@ -130,9 +146,16 @@ def save_image_epoch(tensor, path, name, code_pil, addpattern=True):
     """Save a single image."""
     image = tensor.cpu().clone()
     image = image.squeeze(0)
+    # print(image.shape)
+    image = image[0, :, :]
+    # print(image.shape)
     image = unloader(image)
     if addpattern == True:
         image = add_pattern(image, code_pil, module_number=37, module_size=16)
+
+    # 仅保留黑白
+    image = image.convert('1')
+    # print(image.getpixel((256,34)))
     image.save(os.path.join(path, "epoch_" + str(name)))
 
 

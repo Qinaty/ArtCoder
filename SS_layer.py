@@ -31,6 +31,6 @@ class SSlayer(nn.Module):
                 param.requires_grad = False # each kernel is fixed to gauss weight
 
     def forward(self, x):
-        x = x.repeat(1, 1, 1, 1)
+        x = x.repeat(1, 1, 1, 1)    # (C H W)->(B C H W)
         x = self.conv_module(x)
         return x  # return x for visualization
